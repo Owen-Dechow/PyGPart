@@ -199,7 +199,7 @@ if __name__ == "__main__":
         STRETCH = 6
         NORMAL = 7
 
-    CULL_RATE = 0
+    CULL_RATE = 0.1
     PARTICAL_TRANSFORM = ParticalTransforms.ROTO_STRETCH_LOSSY_UPDATE_CHACHE
 
     debug_animation()
