@@ -1,17 +1,17 @@
-import pygame
+import pygame as pg
 import math
 import random
 
 
-class Particle(pygame.sprite.Sprite):
+class Particle(pg.sprite.Sprite):
     roto_stretch_cache = {}
 
     def __init__(
         self,
-        position: pygame.Vector2,
-        velocity: pygame.Vector2,
-        image: pygame.Surface,
-        group: pygame.sprite.Group,
+        position: pg.Vector2,
+        velocity: pg.Vector2,
+        image: pg.Surface,
+        group: pg.sprite.Group,
         cache_tag: str = None,
         cull_chance: float = 0,
     ):
@@ -72,10 +72,10 @@ class Particle(pygame.sprite.Sprite):
         return (angle, compress, stretch)
 
     def apply_stretch(self):
-        self.image = pygame.transform.scale(self.image, self.get_stretch())
+        self.image = pg.transform.scale(self.image, self.get_stretch())
 
     def apply_direction(self):
-        self.image = pygame.transform.rotate(self.image, self.get_direction())
+        self.image = pg.transform.rotate(self.image, self.get_direction())
 
     def apply_roto_stretch(self, use_cache=False, maintain_lossy=False):
         if maintain_lossy:
@@ -119,8 +119,8 @@ def debug_animation():
         return dt
 
     def create_particle(particle_image, particle_group):
-        position = pygame.Vector2(pygame.mouse.get_pos())
-        velocity = pygame.Vector2(
+        position = pg.Vector2(pg.mouse.get_pos())
+        velocity = pg.Vector2(
             (random.random() * 2 - 1) * 10, (random.random() * 2 - 1) * 10
         )
 
@@ -129,29 +129,43 @@ def debug_animation():
     def update_particles(particle_group):
         for particle in particle_group:
             particle.step(0, 0.5, delta_time)
-            particle.apply_roto_stretch(use_cache=True, maintain_lossy=True)
+            match PARTICAL_TRANSFORM:
+                case ParticalTransforms.ROTO_STRETCH_LOSSY_UPDATE_CHACHE:
+                    particle.apply_roto_stretch(use_cache=True, maintain_lossy=True)
+                case ParticalTransforms.ROTO_STRETCH_LOSSY_UPDATE:
+                    particle.apply_roto_stretch(use_cache=False, maintain_lossy=True)
+                case ParticalTransforms.ROTO_STRETCH_CHACHE:
+                    particle.apply_roto_stretch(use_cache=True, maintain_lossy=False)
+                case ParticalTransforms.ROTO_STRETCH:
+                    particle.apply_roto_stretch(use_cache=False, maintain_lossy=False)
+                case ParticalTransforms.ROTO:
+                    particle.reset()
+                    particle.apply_roto()
+                case ParticalTransforms.STRETCH:
+                    particle.reset()
+                    particle.apply_stretch()
+                case ParticalTransforms.NORMAL:
+                    ...
             if particle.rect.y > 810:
                 particle_group.remove(particle)
 
-    import random
+    pg.init()
+    window = pg.display.set_mode((800, 800))
 
-    pygame.init()
-    window = pygame.display.set_mode((800, 800))
+    clock = pg.time.Clock()
+    font = pg.font.Font(None, 32)
 
-    clock = pygame.time.Clock()
-    font = pygame.font.Font(None, 32)
-
-    particle_group = pygame.sprite.Group()
-    particle_image = pygame.Surface((20, 20), pygame.SRCALPHA).convert_alpha()
-    pygame.draw.rect(
+    particle_group = pg.sprite.Group()
+    particle_image = pg.Surface((20, 20), pg.SRCALPHA).convert_alpha()
+    pg.draw.rect(
         particle_image,
         (255, 255, 255),
-        pygame.Rect(2, 2, 16, 16),
+        pg.Rect(2, 2, 16, 16),
     )
 
     while True:
-        pygame.display.update()
-        surface = pygame.Surface(window.get_size())
+        pg.display.update()
+        surface = pg.Surface(window.get_size())
         delta_time = get_delta_time()
 
         render_text(
@@ -168,11 +182,24 @@ def debug_animation():
         particle_group.draw(surface)
         window.blit(surface, (0, 0))
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
+        for event in pg.event.get():
+            if event.type == pg.QUIT:
+                pg.quit()
                 break
 
 
 if __name__ == "__main__":
+
+    class ParticalTransforms:
+        ROTO_STRETCH_LOSSY_UPDATE_CHACHE = 1
+        ROTO_STRETCH_CHACHE = 2
+        ROTO_STRETCH_LOSSY_UPDATE = 3
+        ROTO_STRETCH = 4
+        ROTO = 5
+        STRETCH = 6
+        NORMAL = 7
+
+    CULL_RATE = 0
+    PARTICAL_TRANSFORM = ParticalTransforms.ROTO_STRETCH_LOSSY_UPDATE_CHACHE
+
     debug_animation()
