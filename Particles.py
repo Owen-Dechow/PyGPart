@@ -1,7 +1,7 @@
-from enum import Enum
 import math
 import pygame as pg
 import random
+from typing import Callable, Hashable
 
 
 class Particle(pg.sprite.Sprite):
@@ -40,76 +40,21 @@ class Particle(pg.sprite.Sprite):
             self.transform_policy.apply_policy(self)
 
 
-class TransformPolicy:
-    class Transform(Enum):
-        STRETCH = "stretch"
-        POINT_DELTA = "point_delta"
-        STRETCH_POINT = "roto_stretch"
-
-    def __init__(
-        self, transforms: tuple[Transform], caching: bool, preserve_image: bool
-    ):
-        self._transforms = tuple(transforms)
-        self._chache = {}
-        self._use_chache = caching
-        self._preserve_image = preserve_image
-
-    def apply_policy(self, particle: Particle):
-        transform_map = {
-            TransformPolicy.Transform.STRETCH: (
-                TransformPolicy._apply_stretch,
-                TransformPolicy._get_stretch_lossy,
-            ),
-            TransformPolicy.Transform.POINT_DELTA: (
-                TransformPolicy._apply_direction,
-                TransformPolicy._get_direction_lossy,
-            ),
-            TransformPolicy.Transform.STRETCH_POINT: (
-                TransformPolicy._apply_rotostretch,
-                TransformPolicy._get_stretch_point_lossy,
-            ),
-        }
-
-        transform_methods = [TransformPolicy._reset_image]
-        cache_keys = [particle.original_image]
-        for tranform in self._transforms:
-            transform_method, cache_key_method = transform_map[tranform]
-            cache_key = cache_key_method(particle)
-
-            transform_methods.append(transform_method)
-            cache_keys.append(cache_key)
-
-        cache_keys = tuple(cache_keys)
-        if cache_keys in self._chache:
-            particle.image = self._chache[cache_keys]
-        else:
-            for transform in transform_methods:
-                transform(particle)
-
-            self._chache[cache_keys] = particle.image
+class Transform:
+    @staticmethod
+    def reset(particle: Particle):
+        particle.image = particle.original_image
 
     @staticmethod
-    def _apply_stretch(particle: Particle):
+    def stretch(particle: Particle):
         particle.image = pg.transform.scale(
-            particle.image, TransformPolicy._get_stretch(particle)
+            particle.image, Transform._get_stretch(particle)
         )
 
     @staticmethod
-    def _apply_direction(particle: Particle):
+    def point_delta(particle: Particle):
         particle.image = pg.transform.rotate(
-            particle.image, TransformPolicy.get_direction(particle)
-        )
-
-    @staticmethod
-    def _apply_rotostretch(particle: Particle):
-        TransformPolicy._apply_stretch(particle)
-        TransformPolicy._apply_direction(particle)
-
-    @staticmethod
-    def _get_stretch_point_lossy(particle):
-        return (
-            TransformPolicy._get_stretch_lossy(particle),
-            TransformPolicy._get_direction_lossy(particle),
+            particle.image, Transform._get_point_delta(particle)
         )
 
     @staticmethod
@@ -129,112 +74,54 @@ class TransformPolicy:
         return compress, stretch
 
     @staticmethod
-    def _get_stretch_lossy(particle: Particle):
-        x, y = TransformPolicy._get_stretch(particle)
+    def get_stretch_lossy(particle: Particle):
+        x, y = Transform._get_stretch(particle)
         return round(x), round(y)
 
     @staticmethod
-    def get_direction(particle: Particle):
+    def _get_point_delta(particle: Particle):
         angle = math.atan2(particle.velocity.x, particle.velocity.y)
         deg = math.degrees(angle) + 180
 
         return deg
 
     @staticmethod
-    def _reset_image(particle: Particle):
-        particle.image = particle.original_image
-
-    @staticmethod
-    def _get_direction_lossy(particle: Particle):
-        return round(TransformPolicy.get_direction(particle))
+    def get_point_delta_lossy(particle: Particle):
+        return round(Transform._get_point_delta(particle))
 
 
-def debug_animation():
-    def render_text(surface, text_lines):
-        for idx, text_line in enumerate(text_lines):
-            text = font.render(text_line, True, (255, 255, 255), (0, 0, 0))
-            surface.blit(text, (25, (idx + 1) * 25))
+class TransformPolicy:
+    def __init__(
+        self,
+        transform_func: Callable[[Particle], None],
+        data_func: Callable[[Particle], Hashable],
+        use_cache: bool = False,
+        add_image_to_cache: bool = False,
+    ):
+        self._transform_func = transform_func
+        self._data_func = data_func
+        self._cache = {}
+        self._use_cache = use_cache
+        self._add_image_to_cache = add_image_to_cache
 
-    def get_delta_time():
-        clock.tick()
-        try:
-            dt = 1 / clock.get_fps() * 30
-        except ZeroDivisionError:
-            dt = 1
+    def apply_policy(self, particle: Particle):
+        Transform.reset(particle)
+        if self._use_cache:
+            self._apply_cached(particle)
+        else:
+            self._apply_uncached(particle)
 
-        return dt
+    def _apply_cached(self, particle: Particle):
+        if self._add_image_to_cache:
+            cache_key = (particle.original_image, self._data_func(particle))
+        else:
+            cache_key = self._data_func(particle)
 
-    def create_particle(particle_image, particle_group):
-        position = pg.Vector2(pg.mouse.get_pos())
-        velocity = pg.Vector2(
-            (random.random() * 2 - 1) * 10, (random.random() * 2 - 1) * 10
-        )
+        if cache_key in self._cache:
+            particle.image = self._cache[cache_key]
+        else:
+            self._transform_func(particle)
+            self._cache[cache_key] = particle.image
 
-        Particle(
-            position,
-            velocity,
-            particle_image,
-            particle_group,
-            cull_chance=0.1,
-            transform_policy=PARTICLE_TRANSFORM_POLICY,
-        )
-
-    def update_particles(particle_group):
-        for particle in particle_group:
-            particle.step(0, 0.5, delta_time)
-            if particle.true_position.y > 810:
-                particle_group.remove(particle)
-
-    pg.init()
-    window = pg.display.set_mode((800, 800))
-
-    clock = pg.time.Clock()
-    font = pg.font.Font(None, 32)
-
-    particle_group = pg.sprite.Group()
-    particle_image = pg.Surface((20, 20), pg.SRCALPHA).convert_alpha()
-    pg.draw.rect(
-        particle_image,
-        (255, 255, 255),
-        pg.Rect(2, 2, 16, 16),
-    )
-
-    while True:
-        pg.display.update()
-        surface = pg.Surface(window.get_size())
-        delta_time = get_delta_time()
-
-        render_text(
-            surface,
-            [
-                f"FPS: {clock.get_fps()}",
-                f"Particles: {len(particle_group)}",
-            ],
-        )
-
-        create_particle(particle_image, particle_group)
-        update_particles(particle_group)
-
-        particle_group.draw(surface)
-        window.blit(surface, (0, 0))
-
-        for event in pg.event.get():
-            if event.type == pg.QUIT:
-                pg.quit()
-                break
-
-
-if __name__ == "__main__":
-
-    CULL_RATE = 0.1
-    PARTICLE_TRANSFORM_POLICY = TransformPolicy(
-        (
-            # TransformPolicy.Transform.STRETCH,
-            # TransformPolicy.Transform.POINT_DELTA,
-            TransformPolicy.Transform.STRETCH_POINT,
-        ),
-        True,
-        True,
-    )
-
-    debug_animation()
+    def _apply_uncached(self, particle: Particle):
+        self._transform_func(particle)
