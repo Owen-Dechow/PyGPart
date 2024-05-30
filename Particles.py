@@ -1,19 +1,18 @@
-import pygame as pg
+from enum import Enum
 import math
+import pygame as pg
 import random
 
 
 class Particle(pg.sprite.Sprite):
-    roto_stretch_cache = {}
-
     def __init__(
         self,
         position: pg.Vector2,
         velocity: pg.Vector2,
         image: pg.Surface,
         group: pg.sprite.Group,
-        cache_tag: str = None,
         cull_chance: float = 0,
+        transform_policy: "TransformPolicy" = None,
     ):
         if random.random() < cull_chance:
             return
@@ -23,19 +22,12 @@ class Particle(pg.sprite.Sprite):
         self.velocity = velocity
         self.true_position = position
         self.rect = self.image.get_rect(center=position)
-        self.cache_tag = cache_tag
         self.last_state = None
+        self.transform_policy = transform_policy
 
         group.add(self)
-        if cache_tag not in Particle.roto_stretch_cache:
-            Particle.roto_stretch_cache[cache_tag] = {}
 
-    def step(
-        self,
-        gravity_x: float,
-        gravity_y: float,
-        dt: float,
-    ):
+    def step(self, gravity_x: float, gravity_y: float, dt: float):
         self.velocity.x += gravity_x * dt
         self.velocity.y += gravity_y * dt
 
@@ -44,63 +36,117 @@ class Particle(pg.sprite.Sprite):
 
         self.rect.center = self.true_position
 
-    def get_stretch(self):
-        total_delta = abs(self.velocity.x) + abs(self.velocity.y)
+        if self.transform_policy:
+            self.transform_policy.apply_policy(self)
+
+
+class TransformPolicy:
+    class Transform(Enum):
+        STRETCH = "stretch"
+        POINT_DELTA = "point_delta"
+        STRETCH_POINT = "roto_stretch"
+
+    def __init__(
+        self, transforms: tuple[Transform], caching: bool, preserve_image: bool
+    ):
+        self._transforms = tuple(transforms)
+        self._chache = {}
+        self._use_chache = caching
+        self._preserve_image = preserve_image
+
+    def apply_policy(self, particle: Particle):
+        transform_map = {
+            TransformPolicy.Transform.STRETCH: (
+                TransformPolicy._apply_stretch,
+                TransformPolicy._get_stretch_lossy,
+            ),
+            TransformPolicy.Transform.POINT_DELTA: (
+                TransformPolicy._apply_direction,
+                TransformPolicy._get_direction_lossy,
+            ),
+            TransformPolicy.Transform.STRETCH_POINT: (
+                TransformPolicy._apply_rotostretch,
+                TransformPolicy._get_stretch_point_lossy,
+            ),
+        }
+
+        transform_methods = [TransformPolicy._reset_image]
+        cache_keys = [particle.original_image]
+        for tranform in self._transforms:
+            transform_method, cache_key_method = transform_map[tranform]
+            cache_key = cache_key_method(particle)
+
+            transform_methods.append(transform_method)
+            cache_keys.append(cache_key)
+
+        cache_keys = tuple(cache_keys)
+        if cache_keys in self._chache:
+            particle.image = self._chache[cache_keys]
+        else:
+            for transform in transform_methods:
+                transform(particle)
+
+            self._chache[cache_keys] = particle.image
+
+    @staticmethod
+    def _apply_stretch(particle: Particle):
+        particle.image = pg.transform.scale(
+            particle.image, TransformPolicy._get_stretch(particle)
+        )
+
+    @staticmethod
+    def _apply_direction(particle: Particle):
+        particle.image = pg.transform.rotate(
+            particle.image, TransformPolicy.get_direction(particle)
+        )
+
+    @staticmethod
+    def _apply_rotostretch(particle: Particle):
+        TransformPolicy._apply_stretch(particle)
+        TransformPolicy._apply_direction(particle)
+
+    @staticmethod
+    def _get_stretch_point_lossy(particle):
+        return (
+            TransformPolicy._get_stretch_lossy(particle),
+            TransformPolicy._get_direction_lossy(particle),
+        )
+
+    @staticmethod
+    def _get_stretch(particle: Particle):
+        total_delta = abs(particle.velocity.x) + abs(particle.velocity.y)
         if total_delta == 0:
-            stretch = self.rect.height
-            compress = self.rect.width
+            stretch = particle.rect.height
+            compress = particle.rect.width
             return
 
         stretch_co = min(max(1, (50 + total_delta) / 50), 1.5)
         compress_co = 2 - stretch_co
 
-        stretch = stretch_co * self.rect.height
-        compress = compress_co * self.rect.width
+        stretch = stretch_co * particle.rect.height
+        compress = compress_co * particle.rect.width
 
         return compress, stretch
 
-    def get_direction(self):
-        angle = math.atan2(self.velocity.x, self.velocity.y)
+    @staticmethod
+    def _get_stretch_lossy(particle: Particle):
+        x, y = TransformPolicy._get_stretch(particle)
+        return round(x), round(y)
+
+    @staticmethod
+    def get_direction(particle: Particle):
+        angle = math.atan2(particle.velocity.x, particle.velocity.y)
         deg = math.degrees(angle) + 180
 
         return deg
 
-    def get_lossy_state(self):
-        angle = round(self.get_direction() * 0.5)
-        compress_ex, stretch_ex = self.get_stretch()
-        compress, stretch = round(compress_ex * 0.5), round(stretch_ex * 0.5)
-        return (angle, compress, stretch)
+    @staticmethod
+    def _reset_image(particle: Particle):
+        particle.image = particle.original_image
 
-    def apply_stretch(self):
-        self.image = pg.transform.scale(self.image, self.get_stretch())
-
-    def apply_direction(self):
-        self.image = pg.transform.rotate(self.image, self.get_direction())
-
-    def apply_roto_stretch(self, use_cache=False, maintain_lossy=False):
-        if maintain_lossy:
-            state = self.get_lossy_state()
-            if self.last_state == state:
-                return
-            else:
-                self.last_state = state
-
-        self.reset_image()
-
-        if use_cache:
-            key = self.get_lossy_state()
-            if key in Particle.roto_stretch_cache:
-                self.image = Particle.roto_stretch_cache[key]
-                return
-
-        self.apply_stretch()
-        self.apply_direction()
-
-        if use_cache:
-            Particle.roto_stretch_cache[key] = self.image
-
-    def reset_image(self):
-        self.image = self.original_image
+    @staticmethod
+    def _get_direction_lossy(particle: Particle):
+        return round(TransformPolicy.get_direction(particle))
 
 
 def debug_animation():
@@ -124,29 +170,19 @@ def debug_animation():
             (random.random() * 2 - 1) * 10, (random.random() * 2 - 1) * 10
         )
 
-        Particle(position, velocity, particle_image, particle_group, cull_chance=0.1)
+        Particle(
+            position,
+            velocity,
+            particle_image,
+            particle_group,
+            cull_chance=0.1,
+            transform_policy=PARTICLE_TRANSFORM_POLICY,
+        )
 
     def update_particles(particle_group):
         for particle in particle_group:
             particle.step(0, 0.5, delta_time)
-            match PARTICAL_TRANSFORM:
-                case ParticalTransforms.ROTO_STRETCH_LOSSY_UPDATE_CHACHE:
-                    particle.apply_roto_stretch(use_cache=True, maintain_lossy=True)
-                case ParticalTransforms.ROTO_STRETCH_LOSSY_UPDATE:
-                    particle.apply_roto_stretch(use_cache=False, maintain_lossy=True)
-                case ParticalTransforms.ROTO_STRETCH_CHACHE:
-                    particle.apply_roto_stretch(use_cache=True, maintain_lossy=False)
-                case ParticalTransforms.ROTO_STRETCH:
-                    particle.apply_roto_stretch(use_cache=False, maintain_lossy=False)
-                case ParticalTransforms.ROTO:
-                    particle.reset()
-                    particle.apply_roto()
-                case ParticalTransforms.STRETCH:
-                    particle.reset()
-                    particle.apply_stretch()
-                case ParticalTransforms.NORMAL:
-                    ...
-            if particle.rect.y > 810:
+            if particle.true_position.y > 810:
                 particle_group.remove(particle)
 
     pg.init()
@@ -190,16 +226,15 @@ def debug_animation():
 
 if __name__ == "__main__":
 
-    class ParticalTransforms:
-        ROTO_STRETCH_LOSSY_UPDATE_CHACHE = 1
-        ROTO_STRETCH_CHACHE = 2
-        ROTO_STRETCH_LOSSY_UPDATE = 3
-        ROTO_STRETCH = 4
-        ROTO = 5
-        STRETCH = 6
-        NORMAL = 7
-
     CULL_RATE = 0.1
-    PARTICAL_TRANSFORM = ParticalTransforms.ROTO_STRETCH_LOSSY_UPDATE_CHACHE
+    PARTICLE_TRANSFORM_POLICY = TransformPolicy(
+        (
+            # TransformPolicy.Transform.STRETCH,
+            # TransformPolicy.Transform.POINT_DELTA,
+            TransformPolicy.Transform.STRETCH_POINT,
+        ),
+        True,
+        True,
+    )
 
     debug_animation()
