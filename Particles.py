@@ -11,6 +11,7 @@ class Particle(pg.sprite.Sprite):
         velocity: pg.Vector2,
         image: pg.Surface,
         group: pg.sprite.Group,
+        life_span: float = 10,
         cull_chance: float = 0,
         transform_policy: "TransformPolicy" = None,
     ):
@@ -24,10 +25,18 @@ class Particle(pg.sprite.Sprite):
         self.rect = self.image.get_rect(center=position)
         self.last_state = None
         self.transform_policy = transform_policy
+        self.life_span = life_span
+        self.age = 0
+        self.group = group
 
         group.add(self)
 
     def step(self, gravity_x: float, gravity_y: float, dt: float):
+        self.age += dt
+        if self.age >= self.life_span:
+            self.group.remove(self)
+            return
+
         self.velocity.x += gravity_x * dt
         self.velocity.y += gravity_y * dt
 
@@ -56,6 +65,18 @@ class Transform:
         particle.image = pg.transform.rotate(
             particle.image, Transform._get_point_delta(particle)
         )
+
+    @staticmethod
+    def scale_over_life(particle: Particle, start: float, end: float):
+        difference = end - start
+        percentage = particle.age / particle.life_span
+        scale = difference * percentage + start
+        size = particle.rect.width * scale, particle.rect.height * scale
+        particle.image = pg.transform.scale(particle.image, size)
+
+    @staticmethod
+    def get_scale_over_life_lossy(particle: Particle, granularity: float):
+        return round(particle.age * granularity)
 
     @staticmethod
     def _get_stretch(particle: Particle):
