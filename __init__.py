@@ -1,1 +1,1 @@
-from particles import Particles, Transform, TransformPolicy
+from .particles import Particle, Transform, TransformPolicy

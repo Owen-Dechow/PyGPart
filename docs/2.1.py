@@ -51,9 +51,9 @@ def animation():
         except ZeroDivisionError:
             dt = 1
 
-        # update_particles(group, dt)
-        # create_particle(group, image)
-        # group.draw(window)
+        update_particles(group, dt)
+        create_particle(group, image)
+        group.draw(window)
 
         clock.tick()
         pg.display.update()
