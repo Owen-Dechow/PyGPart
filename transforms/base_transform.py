@@ -1,5 +1,5 @@
-from typing import Hashable
 from __future__ import particles
+from typing import Hashable
 
 
 class BaseTransform:

@@ -1,6 +1,6 @@
+from __future__ import particals
 from typing import Hashable
 from base_transform import BaseTransform
-from __future__ import particals
 from pygame import pg
 import math
 
