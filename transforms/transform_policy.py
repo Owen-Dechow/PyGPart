@@ -1,8 +1,10 @@
+from __future__ import particle
 from typing import TYPE_CHECKING
 from base_transform import BaseTransform
 
+
 if TYPE_CHECKING:
-    from ..particle import Particle
+    from .. import particle
 
 
 class TransformPolicy:
@@ -17,14 +19,14 @@ class TransformPolicy:
         self._use_cache = use_cache
         self._add_image_to_cache = add_image_to_cache
 
-    def apply_policy(self, particle: Particle):
+    def apply_policy(self, particle: particle.Particle):
         BaseTransform.reset(particle)
         if self._use_cache:
             self._apply_cached(particle)
         else:
             self._apply_uncached(particle)
 
-    def _apply_cached(self, particle: Particle):
+    def _apply_cached(self, particle: particle.Particle):
         cache_key_generator = (x.cache_key(particle) for x in self._transforms)
 
         if self._add_image_to_cache:
@@ -41,6 +43,6 @@ class TransformPolicy:
 
             self._cache[cache_key] = particle.image
 
-    def _apply_uncached(self, particle: Particle):
+    def _apply_uncached(self, particle: particle.Particle):
         for transform in self._transforms:
             transform.apply(particle)
