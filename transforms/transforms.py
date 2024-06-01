@@ -1,22 +1,24 @@
-from __future__ import particals
-from typing import Hashable
+from typing import Hashable, TYPE_CHECKING
 from base_transform import BaseTransform
 from pygame import pg
 import math
 
+if TYPE_CHECKING:
+    from ..particle import Particle
+
 
 class StretchY(BaseTransform):
     @classmethod
-    def apply(cls, particle: particals.Particle):
+    def apply(cls, particle: Particle):
         particle.image = pg.transform.scale(particle.image, cls._get_stretch(particle))
 
     @classmethod
-    def cache_key(cls, particle: particals.Particle) -> Hashable:
+    def cache_key(cls, particle: Particle) -> Hashable:
         x, y = cls._get_stretch(particle)
         return round(x), round(y)
 
     @classmethod
-    def _get_stretch(cls, particle: particals.Particle):
+    def _get_stretch(cls, particle: Particle):
         total_delta = abs(particle.velocity.x) + abs(particle.velocity.y)
         if total_delta == 0:
             stretch = particle.rect.height
@@ -34,17 +36,17 @@ class StretchY(BaseTransform):
 
 class PointDelta(BaseTransform):
     @classmethod
-    def apply(cls, particle: particals.Particle):
+    def apply(cls, particle: Particle):
         particle.image = pg.transform.rotate(
             particle.image, cls._get_point_delta(particle)
         )
 
     @classmethod
-    def cache_key(cls, particle: particals.Particle) -> Hashable:
+    def cache_key(cls, particle: Particle) -> Hashable:
         return round(cls._get_point_delta(particle))
 
     @classmethod
-    def _get_point_delta(cls, particle: particals.Particle):
+    def _get_point_delta(cls, particle: Particle):
         angle = math.atan2(particle.velocity.x, particle.velocity.y)
         deg = math.degrees(angle) + 180
 
@@ -53,18 +55,18 @@ class PointDelta(BaseTransform):
 
 class ShrinkOverLife(BaseTransform):
     @classmethod
-    def apply(cls, particle: particals.Particle):
+    def apply(cls, particle: Particle):
         percentage = particle.age / particle.life_span
         scale = 1 - percentage
         size = particle.rect.width * scale, particle.rect.height * scale
         particle.image = pg.transform.scale(particle.image, size)
 
     @classmethod
-    def cache_key(cls, particle: particals.Particle) -> Hashable:
+    def cache_key(cls, particle: Particle) -> Hashable:
         return round(cls._get_scale(particle) * 10)
 
     @classmethod
-    def _get_scale(cls, particle: particals.Particle):
+    def _get_scale(cls, particle: Particle):
         percentage = particle.age / particle.life_span
         scale = 1 - percentage
         return scale
