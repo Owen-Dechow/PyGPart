@@ -1,17 +1,13 @@
-from __future__ import particle
-from typing import Hashable, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from .. import particle
+from typing import Hashable
 
 
 class BaseTransform:
     @classmethod
-    def apply(cls, particle: particle.Particle): ...
+    def apply(cls, particle): ...
 
     @classmethod
-    def cache_key(cls, particle: particle.Particle) -> Hashable: ...
+    def cache_key(cls, particle) -> Hashable: ...
 
     @staticmethod
-    def reset(particle: particle.Particle):
+    def reset(particle):
         particle.image = particle.original_image
