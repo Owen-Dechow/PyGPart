@@ -1,4 +1,4 @@
-from base_transform import BaseTransform
+from .base_transform import BaseTransform
 
 
 class TransformPolicy:
