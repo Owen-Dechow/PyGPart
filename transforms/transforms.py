@@ -1,6 +1,6 @@
 from typing import Hashable
 from .base_transform import BaseTransform
-from pygame import pg
+import pygame as pg
 import math
 
 
