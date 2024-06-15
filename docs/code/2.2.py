@@ -1,5 +1,4 @@
-from PyGPart import Particle, transforms
-from PygPart.transforms import TransformPolicy
+from PyGPart import Particle, transforms, TransformPolicy
 import pygame as pg
 import random
 
