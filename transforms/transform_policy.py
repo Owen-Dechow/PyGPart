@@ -1,10 +1,10 @@
 from .base_transform import BaseTransform
-
+from typing import Type
 
 class TransformPolicy:
     def __init__(
         self,
-        *transforms: BaseTransform,
+        *transforms: Type[BaseTransform],
         use_cache: bool = False,
         add_image_to_cache: bool = False,
     ):

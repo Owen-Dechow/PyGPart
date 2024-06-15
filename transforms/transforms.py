@@ -15,18 +15,19 @@ class StretchY(BaseTransform):
         return round(x), round(y)
 
     @classmethod
-    def _get_stretch(cls, particle):
+    def _get_stretch(cls, particle) -> tuple[float, float]:
         total_delta = abs(particle.velocity.x) + abs(particle.velocity.y)
+        total_delta *= 0.025
         if total_delta == 0:
             stretch = particle.rect.height
             compress = particle.rect.width
-            return
+        
+        else:
+            stretch_co = min(max(1, (50 + total_delta) / 50), 1.5)
+            compress_co = 2 - stretch_co
 
-        stretch_co = min(max(1, (50 + total_delta) / 50), 1.5)
-        compress_co = 2 - stretch_co
-
-        stretch = stretch_co * particle.rect.height
-        compress = compress_co * particle.rect.width
+            stretch = stretch_co * particle.rect.height
+            compress = compress_co * particle.rect.width
 
         return compress, stretch
 
