@@ -1,6 +1,6 @@
 import pygame as pg
 import random
-from .transforms import TransformPolicy
+from transforms.transform_policy import TransformPolicy
 
 
 class Particle(pg.sprite.Sprite):
